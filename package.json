@@ -1,8 +1,8 @@
 {
 	"name": "time-tracker",
-	"version": "0.0.1",
+	"version": "0.1.0",
 	"scripts": {
-		"dev": "vite dev",
+		"dev": "vite dev --https --host",
 		"build": "vite build",
 		"preview": "vite preview",
 		"test": "playwright test",
@@ -23,6 +23,7 @@
 		"@types/luxon": "^3.2.0",
 		"@typescript-eslint/eslint-plugin": "^5.45.0",
 		"@typescript-eslint/parser": "^5.45.0",
+		"@vitejs/plugin-basic-ssl": "^1.0.1",
 		"eslint": "^8.28.0",
 		"eslint-config-prettier": "^8.5.0",
 		"eslint-plugin-svelte3": "^4.0.0",

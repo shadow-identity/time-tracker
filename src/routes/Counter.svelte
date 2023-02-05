@@ -1,17 +1,7 @@
 <script lang="ts">
-	import { spring } from 'svelte/motion';
-	import { DateTime, Duration } from 'luxon';
+	import { DateTime, Duration, Interval } from 'luxon';
 	import { browser } from '$app/environment';
-
-	let count = 0;
-	const displayed_count = spring();
-	$: displayed_count.set(count);
-	$: offset = modulo($displayed_count, 1);
-
-	function modulo(n: number, m: number) {
-		// handle negative numbers
-		return ((n % m) + m) % m;
-	}
+	import Time, { State } from './Time.svelte';
 
 	type WorkRecord = { isWorking: boolean; timestamp: DateTime };
 
@@ -24,150 +14,141 @@
 
 	let currentPeriod = '';
 	let totallyWorked = '';
+	let pauseDuration = ''; // todo: remove from here?
+
+	const workRecordsReducer = (
+		duration: Duration,
+		workRecord: WorkRecord,
+		currentIndex: number,
+		workRecords: WorkRecord[]
+	) => {
+		if (workRecord.isWorking) {
+			const currentInterval = Interval.fromDateTimes(workRecord.timestamp, DateTime.now());
+			return currentIndex === workRecords.length - 1
+				? duration.plus(currentInterval.toDuration())
+				: duration;
+		}
+
+		const lastWorkingInterval = Interval.fromDateTimes(
+			workRecords[currentIndex - 1].timestamp,
+			workRecord.timestamp
+		);
+		return duration.plus(lastWorkingInterval.toDuration());
+	};
+
+	const pauseRecordsReducer = (
+		duration: Duration,
+		workRecord: WorkRecord,
+		currentIndex: number,
+		workRecords: WorkRecord[]
+	) => {
+		const previousRecord = workRecords[currentIndex - 1];
+		if (!workRecord.isWorking || !previousRecord || (previousRecord && previousRecord?.isWorking))
+			return duration;
+		return duration.plus(
+			Interval.fromDateTimes(previousRecord.timestamp, workRecord.timestamp).toDuration()
+		);
+	};
+
+	const canShare = browser && !!navigator.canShare?.({ text: '' });
+
+	const prepareExportString = () => {
+		const firstWorkingTime = workRecords
+			.find((workRecord) => workRecord.isWorking)
+			?.timestamp.toFormat('hh:mm:ss');
+		const lastWorkingTime: WorkRecord = workRecords.findLast((workRecord) => workRecord.isWorking);
+		pauseDuration = workRecords
+			.reduce(pauseRecordsReducer, Duration.fromMillis(0))
+			.toFormat('hh:mm:ss');
+		return `${firstWorkingTime}\t${lastWorkingTime.timestamp.toFormat(
+			'hh:mm:ss'
+		)}\t\t\t${pauseDuration}`;
+	};
+
+	const shareOrSave = async () => {
+		if (!browser) return;
+		const text = prepareExportString();
+		if (navigator.canShare?.({ text })) {
+			try {
+				await navigator.share({
+					title: 'Share all barcodes',
+					text
+				});
+				console.log('shared', pauseDuration);
+			} catch (error) {
+				console.error(error);
+			}
+		} else {
+			const a = document.createElement('a');
+			const filename = DateTime.now().toFormat('yyyy-mm-dd');
+			a.href = window.URL.createObjectURL(
+				new File([text], `report_${filename}.txt`, {
+					type: 'text/plain'
+				})
+			);
+			a.download = filename;
+			a.click();
+		}
+	};
 
 	const updateCurrentPeroid = () => {
 		if (!browser) return;
 		if (workRecords.length) {
 			const now = DateTime.now();
+			// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
 			currentPeriod = now.diff(workRecords.at(-1)!.timestamp).toFormat('hh:mm:ss');
 
 			totallyWorked = workRecords
-				.reduce((duration, workRecord, currentIndex) => {
-					if (workRecord.isWorking) return duration;
-					const upperTime =
-						currentIndex === workRecords.length - 1 ? now : workRecords.at(-1)?.timestamp;
-					return duration.plus(upperTime?.diff(workRecords.at(-2)!.timestamp));
-				}, Duration.fromMillis(0))
+				.reduce(workRecordsReducer, Duration.fromMillis(0))
 				.toFormat('hh:mm:ss');
 		}
 		window.requestAnimationFrame(updateCurrentPeroid);
 	};
 
 	browser && window.requestAnimationFrame(updateCurrentPeroid);
-	/* 
-	true, 10:00
-	false, 12:00
-	true, 13:00
-	now: 13:30
 
-	0) 0:00
-	1) 2:00
-	2) 2:00
-	3) 2:30
-	*/
+	let state: State;
+	$: if (!workRecords.length) state = State.NotStarted;
+	else if (isWorking) state = State.Working;
+	else state = State.Chilling;
 </script>
 
-{#if !workRecords.length}
-	<h1>Time to work!</h1>
-{:else if workRecords.at(-1)?.isWorking}
-	<h1>Working...</h1>
-	<h2>{currentPeriod}</h2>
-{:else}
-	<h1>Chilling...</h1>
-	<h2>{currentPeriod}</h2>
-{/if}
+<main>
+	<Time {state} currentDuration={currentPeriod} {totallyWorked} />
 
-<h3>
-	Totally worked today:
-	{totallyWorked}
-</h3>
+	{pauseDuration}
+</main>
 
-<button on:click={switchState}>{isWorking ? 'Pause' : 'Work'}</button>
-<!-- {#each workRecords as workRecord, index}
-	{#if !workRecord.isWorking}
-		<p>
-			{`${workRecords
-				.at(-2)
-				.timestamp.toLocaleString(DateTime.TIME_SIMPLE)} - ${workRecord.timestamp.toLocaleString(
-				DateTime.TIME_SIMPLE
-			)} | ${workRecord.timestamp.diff(workRecords.at(index - 1).timestamp).toFormat('hh:mm')}`}
-		</p>
-	{/if}
-{/each} -->
-<div class="counter">
-	<button on:click={() => (count -= 1)} aria-label="Decrease the counter by one">
-		<svg aria-hidden="true" viewBox="0 0 1 1">
-			<path d="M0,0.5 L1,0.5" />
-		</svg>
-	</button>
-
-	<div class="counter-viewport">
-		<div class="counter-digits" style="transform: translate(0, {100 * offset}%)">
-			<strong class="hidden" aria-hidden="true">{Math.floor($displayed_count + 1)}</strong>
-			<strong>{Math.floor($displayed_count)}</strong>
-		</div>
-	</div>
-
-	<button on:click={() => (count += 1)} aria-label="Increase the counter by one">
-		<svg aria-hidden="true" viewBox="0 0 1 1">
-			<path d="M0,0.5 L1,0.5 M0.5,0 L0.5,1" />
-		</svg>
-	</button>
-</div>
+<footer>
+	<button on:click={switchState}>{isWorking ? 'Pause' : 'Work'}</button>
+	<button on:click={shareOrSave} class="outline">{canShare ? 'Share' : 'Save'}</button>
+</footer>
 
 <style>
-	.counter {
+	main {
+		flex: 1;
 		display: flex;
-		border-top: 1px solid rgba(0, 0, 0, 0.1);
-		border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-		margin: 1rem 0;
-	}
-
-	.counter button {
-		width: 2em;
-		padding: 0;
-		display: flex;
-		align-items: center;
+		flex-direction: column;
 		justify-content: center;
-		border: 0;
-		background-color: transparent;
-		touch-action: manipulation;
-		font-size: 2rem;
+		padding: 1rem;
+		width: 100%;
+		max-width: 64rem;
+		margin: 0 auto;
+		box-sizing: border-box;
 	}
 
-	.counter button:hover {
-		background-color: var(--color-bg-1);
-	}
-
-	svg {
-		width: 25%;
-		height: 25%;
-	}
-
-	path {
-		vector-effect: non-scaling-stroke;
-		stroke-width: 2px;
-		stroke: #444;
-	}
-
-	.counter-viewport {
-		width: 8em;
-		height: 4em;
-		overflow: hidden;
-		text-align: center;
-		position: relative;
-	}
-
-	.counter-viewport strong {
-		position: absolute;
+	footer {
 		display: flex;
 		width: 100%;
-		height: 100%;
-		font-weight: 400;
-		color: var(--color-theme-1);
-		font-size: 4rem;
-		align-items: center;
+		flex-direction: column;
 		justify-content: center;
+		align-items: center;
+		padding: 12px;
 	}
 
-	.counter-digits {
-		position: absolute;
-		width: 100%;
-		height: 100%;
-	}
-
-	.hidden {
-		top: -100%;
-		user-select: none;
+	@media (min-width: 480px) {
+		footer {
+			padding: 12px 0;
+		}
 	}
 </style>
