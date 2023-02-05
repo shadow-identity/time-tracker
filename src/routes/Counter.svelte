@@ -2,19 +2,56 @@
 	import { DateTime, Duration, Interval } from 'luxon';
 	import { browser } from '$app/environment';
 	import Time, { State } from './Time.svelte';
+	import { get, set } from 'idb-keyval';
+	import { onMount } from 'svelte';
 
 	type WorkRecord = { isWorking: boolean; timestamp: DateTime };
+	type SerializedWorkRecords = {
+		isWorking: boolean;
+		timestamp: number;
+	};
+
+	const IDB_KEY_FORMAT = 'yyyy_MM_dd';
+	const PRINT_FORMAT = 'hh:mm:ss';
 
 	let isWorking = false;
 	let workRecords: WorkRecord[] = [];
-	const switchState = () => {
-		isWorking = !isWorking;
-		workRecords = [...workRecords, { isWorking, timestamp: DateTime.now() }];
-	};
 
 	let currentPeriod = '';
 	let totallyWorked = '';
 	let pauseDuration = ''; // todo: remove from here?
+
+	const serializeWorkRecords = (workRecords: WorkRecord[]): SerializedWorkRecords[] => {
+		return workRecords.map((workRecord) => ({
+			isWorking: workRecord.isWorking,
+			timestamp: workRecord.timestamp.toMillis()
+		}));
+	};
+
+	const restoreWorkRecords = (serializedWorkRecords: SerializedWorkRecords[]): WorkRecords[] => {
+		return serializedWorkRecords.map((workRecord) => ({
+			isWorking: workRecord.isWorking,
+			timestamp: DateTime.fromMillis(workRecord.timestamp)
+		}));
+	};
+
+	const readData = async () => {
+		workRecords = restoreWorkRecords((await get(DateTime.now().toFormat(IDB_KEY_FORMAT))) ?? []);
+		if (workRecords.length) isWorking = workRecords.at(-1)?.isWorking ?? false;
+	};
+
+	onMount(() => {
+		readData();
+	});
+
+	const switchState = () => {
+		isWorking = !isWorking;
+		const newWorkRecord = { isWorking, timestamp: DateTime.now() };
+		workRecords.push(newWorkRecord);
+		workRecords = workRecords;
+
+		set(DateTime.now().toFormat(IDB_KEY_FORMAT), serializeWorkRecords(workRecords));
+	};
 
 	const workRecordsReducer = (
 		duration: Duration,
@@ -55,13 +92,13 @@
 	const prepareExportString = () => {
 		const firstWorkingTime = workRecords
 			.find((workRecord) => workRecord.isWorking)
-			?.timestamp.toFormat('hh:mm:ss');
+			?.timestamp.toFormat(PRINT_FORMAT);
 		const lastWorkingTime: WorkRecord = workRecords.findLast((workRecord) => workRecord.isWorking);
 		pauseDuration = workRecords
 			.reduce(pauseRecordsReducer, Duration.fromMillis(0))
-			.toFormat('hh:mm:ss');
+			.toFormat(PRINT_FORMAT);
 		return `${firstWorkingTime}\t${lastWorkingTime.timestamp.toFormat(
-			'hh:mm:ss'
+			PRINT_FORMAT
 		)}\t\t\t${pauseDuration}`;
 	};
 
@@ -94,13 +131,18 @@
 	const updateCurrentPeroid = () => {
 		if (!browser) return;
 		if (workRecords.length) {
+			if (workRecords[0].timestamp.day !== DateTime.now().day) {
+				resetRecords();
+				return;
+			}
+
 			const now = DateTime.now();
 			// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-			currentPeriod = now.diff(workRecords.at(-1)!.timestamp).toFormat('hh:mm:ss');
+			currentPeriod = now.diff(workRecords.at(-1)!.timestamp).toFormat(PRINT_FORMAT);
 
 			totallyWorked = workRecords
 				.reduce(workRecordsReducer, Duration.fromMillis(0))
-				.toFormat('hh:mm:ss');
+				.toFormat(PRINT_FORMAT);
 		}
 		window.requestAnimationFrame(updateCurrentPeroid);
 	};
@@ -108,20 +150,28 @@
 	browser && window.requestAnimationFrame(updateCurrentPeroid);
 
 	let state: State;
-	$: if (!workRecords.length) state = State.NotStarted;
-	else if (isWorking) state = State.Working;
-	else state = State.Chilling;
+	$: {
+		if (!workRecords.length) state = State.NotStarted;
+		else if (isWorking) state = State.Working;
+		else state = State.Chilling;
+	}
+
+	const resetRecords = () => {
+		workRecords = [];
+		isWorking = false;
+	};
 </script>
 
 <main>
 	<Time {state} currentDuration={currentPeriod} {totallyWorked} />
-
-	{pauseDuration}
 </main>
 
 <footer>
 	<button on:click={switchState}>{isWorking ? 'Pause' : 'Work'}</button>
-	<button on:click={shareOrSave} class="outline">{canShare ? 'Share' : 'Save'}</button>
+	<section>
+		<button on:click={resetRecords} class="outline warning">Reset</button>
+		<button on:click={shareOrSave} class="outline">{canShare ? 'Share' : 'Save'}</button>
+	</section>
 </footer>
 
 <style>
@@ -146,9 +196,31 @@
 		padding: 12px;
 	}
 
+	footer section {
+		display: flex;
+		flex-direction: row;
+		/* flex-wrap: wrap; */
+		justify-content: center;
+		width: 100%;
+		gap: var(--spacing);
+	}
+
+	footer section button:first-child {
+		flex: auto 0 5;
+	}
+
 	@media (min-width: 480px) {
 		footer {
 			padding: 12px 0;
 		}
+	}
+
+	button.warning {
+		color: #f0f9;
+		border-color: #f0f9;
+	}
+	button.warning:hover {
+		color: fuchsia;
+		border-color: fuchsia;
 	}
 </style>
