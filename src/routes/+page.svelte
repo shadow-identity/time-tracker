@@ -3,8 +3,8 @@
 </script>
 
 <svelte:head>
-	<title>Home</title>
-	<meta name="description" content="Svelte demo app" />
+	<title>Time Tracker</title>
+	<meta name="description" content="App to track working and rest time" />
 </svelte:head>
 
 <section>
