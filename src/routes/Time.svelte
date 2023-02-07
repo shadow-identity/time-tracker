@@ -26,4 +26,8 @@
 	h1 span {
 		font-size: smaller;
 	}
+
+	h3 {
+		text-align: center;
+	}
 </style>

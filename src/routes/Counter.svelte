@@ -1,42 +1,26 @@
 <script lang="ts">
-	import { DateTime, Duration, Interval } from 'luxon';
+	import { DateTime } from 'luxon';
 	import { browser } from '$app/environment';
 	import Time, { State } from './Time.svelte';
-	import { get, set } from 'idb-keyval';
 	import { onMount } from 'svelte';
-
-	type WorkRecord = { isWorking: boolean; timestamp: DateTime };
-	type SerializedWorkRecords = {
-		isWorking: boolean;
-		timestamp: number;
-	};
-
-	const IDB_KEY_FORMAT = 'yyyy_MM_dd';
-	const PRINT_FORMAT = 'hh:mm:ss';
+	import {
+		type WorkRecord,
+		addWorkRecord,
+		restoreWorkRecords,
+		readWorkRecords,
+		PRINT_FORMAT,
+		getWorkDuration,
+		getPauseDuration
+	} from '$lib/workRecords';
 
 	let isWorking = false;
 	let workRecords: WorkRecord[] = [];
 
 	let currentPeriod = '';
 	let totallyWorked = '';
-	let pauseDuration = ''; // todo: remove from here?
-
-	const serializeWorkRecords = (workRecords: WorkRecord[]): SerializedWorkRecords[] => {
-		return workRecords.map((workRecord) => ({
-			isWorking: workRecord.isWorking,
-			timestamp: workRecord.timestamp.toMillis()
-		}));
-	};
-
-	const restoreWorkRecords = (serializedWorkRecords: SerializedWorkRecords[]): WorkRecords[] => {
-		return serializedWorkRecords.map((workRecord) => ({
-			isWorking: workRecord.isWorking,
-			timestamp: DateTime.fromMillis(workRecord.timestamp)
-		}));
-	};
 
 	const readData = async () => {
-		workRecords = restoreWorkRecords((await get(DateTime.now().toFormat(IDB_KEY_FORMAT))) ?? []);
+		workRecords = restoreWorkRecords(await readWorkRecords());
 		if (workRecords.length) isWorking = workRecords.at(-1)?.isWorking ?? false;
 	};
 
@@ -46,45 +30,7 @@
 
 	const switchState = () => {
 		isWorking = !isWorking;
-		const newWorkRecord = { isWorking, timestamp: DateTime.now() };
-		workRecords.push(newWorkRecord);
-		workRecords = workRecords;
-
-		set(DateTime.now().toFormat(IDB_KEY_FORMAT), serializeWorkRecords(workRecords));
-	};
-
-	const workRecordsReducer = (
-		duration: Duration,
-		workRecord: WorkRecord,
-		currentIndex: number,
-		workRecords: WorkRecord[]
-	) => {
-		if (workRecord.isWorking) {
-			const currentInterval = Interval.fromDateTimes(workRecord.timestamp, DateTime.now());
-			return currentIndex === workRecords.length - 1
-				? duration.plus(currentInterval.toDuration())
-				: duration;
-		}
-
-		const lastWorkingInterval = Interval.fromDateTimes(
-			workRecords[currentIndex - 1].timestamp,
-			workRecord.timestamp
-		);
-		return duration.plus(lastWorkingInterval.toDuration());
-	};
-
-	const pauseRecordsReducer = (
-		duration: Duration,
-		workRecord: WorkRecord,
-		currentIndex: number,
-		workRecords: WorkRecord[]
-	) => {
-		const previousRecord = workRecords[currentIndex - 1];
-		if (!workRecord.isWorking || !previousRecord || (previousRecord && previousRecord?.isWorking))
-			return duration;
-		return duration.plus(
-			Interval.fromDateTimes(previousRecord.timestamp, workRecord.timestamp).toDuration()
-		);
+		workRecords = addWorkRecord(workRecords, isWorking);
 	};
 
 	const canShare = browser && !!navigator.canShare?.({ text: '' });
@@ -93,10 +39,12 @@
 		const firstWorkingTime = workRecords
 			.find((workRecord) => workRecord.isWorking)
 			?.timestamp.toFormat(PRINT_FORMAT);
-		const lastWorkingTime: WorkRecord = workRecords.findLast((workRecord) => workRecord.isWorking);
-		pauseDuration = workRecords
-			.reduce(pauseRecordsReducer, Duration.fromMillis(0))
-			.toFormat(PRINT_FORMAT);
+		// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+		// @ts-ignore it does not aware about findLast O_o
+		const lastWorkingTime: WorkRecord = workRecords.findLast(
+			(workRecord: WorkRecord) => workRecord.isWorking
+		);
+		const pauseDuration = getPauseDuration(workRecords);
 		return `${firstWorkingTime}\t${lastWorkingTime.timestamp.toFormat(
 			PRINT_FORMAT
 		)}\t\t\t${pauseDuration}`;
@@ -111,7 +59,7 @@
 					title: 'Share all barcodes',
 					text
 				});
-				console.log('shared', pauseDuration);
+				console.log('shared', text);
 			} catch (error) {
 				console.error(error);
 			}
@@ -131,18 +79,18 @@
 	const updateCurrentPeroid = () => {
 		if (!browser) return;
 		if (workRecords.length) {
-			if (workRecords[0].timestamp.day !== DateTime.now().day) {
+			const now = DateTime.now();
+
+			// Create a new idb record for a new day
+			if (workRecords[0].timestamp.day !== now.day) {
 				resetRecords();
 				return;
 			}
 
-			const now = DateTime.now();
 			// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
 			currentPeriod = now.diff(workRecords.at(-1)!.timestamp).toFormat(PRINT_FORMAT);
 
-			totallyWorked = workRecords
-				.reduce(workRecordsReducer, Duration.fromMillis(0))
-				.toFormat(PRINT_FORMAT);
+			totallyWorked = getWorkDuration(workRecords);
 		}
 		window.requestAnimationFrame(updateCurrentPeroid);
 	};
@@ -159,6 +107,7 @@
 	const resetRecords = () => {
 		workRecords = [];
 		isWorking = false;
+		resetRecords();
 	};
 </script>
 
