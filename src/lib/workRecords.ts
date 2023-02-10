@@ -1,14 +1,12 @@
 import { entries, get, set } from 'idb-keyval';
 import { DateTime, Duration, Interval } from 'luxon';
+import { IDB_KEY_FORMAT, PRINT_FORMAT } from './constants';
 
 type WorkRecord = { isWorking: boolean; timestamp: DateTime };
 type SerializedWorkRecord = {
 	isWorking: boolean;
 	timestamp: number;
 };
-
-const IDB_KEY_FORMAT = 'yyyy_MM_dd';
-const PRINT_FORMAT = 'hh:mm:ss';
 
 const serializeWorkRecords = (workRecords: WorkRecord[]): SerializedWorkRecord[] => {
 	return workRecords.map((workRecord) => ({
@@ -45,7 +43,7 @@ const addWorkRecord = (workRecords: WorkRecord[], isWorking: boolean) => {
 	return workRecords;
 };
 
-const resetRecords = (date = DateTime.now().toFormat(IDB_KEY_FORMAT)) => set(date, []);
+const resetDayRecords = (date = DateTime.now().toFormat(IDB_KEY_FORMAT)) => set(date, []);
 
 const workRecordsReducer = (
 	duration: Duration,
@@ -93,11 +91,9 @@ export {
 	serializeWorkRecords,
 	restoreWorkRecords,
 	readWorkRecords,
-	resetRecords,
+	resetDayRecords,
 	getWorkDuration,
 	getPauseDuration,
 	type WorkRecord,
-	type SerializedWorkRecord,
-	IDB_KEY_FORMAT,
-	PRINT_FORMAT
+	type SerializedWorkRecord
 };

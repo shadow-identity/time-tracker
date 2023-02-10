@@ -1,17 +1,14 @@
 <script context="module" lang="ts">
-	export enum State {
-		'NotStarted',
-		'Working',
-		'Chilling'
-	}
 </script>
 
 <script lang="ts">
+	import { State, STATE_SYMBOL } from '$lib/constants';
 	export let state: State;
 	export let currentDuration: string;
 	export let totallyWorked: string;
 </script>
 
+<span aria-hidden="true" class="state-symbol">{STATE_SYMBOL[state]}</span>
 {#if state === State.NotStarted}
 	<h1>Time to start working!</h1>
 {:else}
@@ -29,5 +26,10 @@
 
 	h3 {
 		text-align: center;
+	}
+
+	.state-symbol {
+		margin: 0 auto;
+		font-size: 5rem;
 	}
 </style>
