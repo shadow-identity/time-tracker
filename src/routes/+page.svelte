@@ -7,12 +7,12 @@
 	<meta name="description" content="App to track working and rest time" />
 </svelte:head>
 
-<section>
+<div>
 	<Counter />
-</section>
+</div>
 
 <style>
-	section {
+	div {
 		display: flex;
 		flex-direction: column;
 		justify-content: center;

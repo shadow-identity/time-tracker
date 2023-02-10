@@ -1,5 +1,7 @@
 <script lang="ts">
-	import { getPauseDuration, getWorkDuration, PRINT_FORMAT, readAllDays } from '$lib/workRecords';
+	import { dev } from '$app/environment';
+	import { PRINT_FORMAT, State, STATE_SYMBOL } from '$lib/constants';
+	import { getPauseDuration, getWorkDuration, readAllDays } from '$lib/workRecords';
 	import { DateTime } from 'luxon';
 </script>
 
@@ -11,33 +13,43 @@
 <h1>Journal</h1>
 <main>
 	{#await readAllDays() then days}
-		{#each days as day}
-			<header>
-				<h2>{day[0]}</h2>
-				<p>
-					<span>Worked:&nbsp;{getWorkDuration(day[1])}</span>
-					<span>Chilled:&nbsp;{getPauseDuration(day[1])}</span>
-				</p>
-			</header>
-			<ul>
-				{#each day[1] as workRecord, index}
-					<li class="duration_item">
-						<i>{workRecord.timestamp.toLocaleString(DateTime.TIME_WITH_SECONDS)}</i>
-						{#if index < day[1].length - 1}
-							<!-- todo: don't use unnecessary list here -->
-							<ul class="duration">
-								<li data-type={workRecord.isWorking ? 'work' : 'chill'}>
-									<span class="secondary"
-										>{day[1][index + 1].timestamp
-											.diff(day[1][index].timestamp)
-											.toFormat(PRINT_FORMAT)}
-									</span>
-								</li>
-							</ul>
-						{/if}
-					</li>
-				{/each}
-			</ul>
+		{#each days.reverse() as day, index}
+			<details open={!index}>
+				<summary>
+					{day[0]}
+				</summary>
+				<hgroup>
+					<h5>Summary</h5>
+					<p>
+						<span>{STATE_SYMBOL[State.Working]}&nbsp;Worked:&nbsp;{getWorkDuration(day[1])}</span>
+						<span>{STATE_SYMBOL[State.Chilling]}&nbsp;Chilled:&nbsp;{getPauseDuration(day[1])}</span
+						>
+					</p>
+				</hgroup>
+				<h5>Details</h5>
+				<ul>
+					{#each day[1] as workRecord, index}
+						<li
+							data-type={workRecord.isWorking ? 'work' : 'chill'}
+							aria-label={workRecord.isWorking ? 'work started' : 'pause started'}
+						>
+							<span
+								>{workRecord.timestamp.toLocaleString(
+									DateTime[dev ? 'TIME_WITH_SECONDS' : 'TIME_SIMPLE']
+								)}</span
+							>
+							{#if index < day[1].length - 1}
+								<p
+									class="duration"
+									aria-label={workRecord.isWorking ? 'work duration' : 'pause duration'}
+								>
+									{day[1][index + 1].timestamp.diff(day[1][index].timestamp).toFormat(PRINT_FORMAT)}
+								</p>
+							{/if}
+						</li>
+					{/each}
+				</ul>
+			</details>
 		{/each}
 	{/await}
 </main>
@@ -49,19 +61,29 @@
 		align-items: center;
 	}
 
-	.duration {
-		margin-top: 0;
-		font-size: x-large;
-		/* todo: fix with list-style? */
-		margin-left: 1rem;
+	@media (max-width: 300rem) {
+		main {
+			padding-left: 1rem;
+			padding-right: 1rem;
+		}
 	}
 
-	.duration_item {
-		list-style: repeating;
+	details {
+		width: 100%;
+	}
+
+	.duration {
+		margin-bottom: 0;
+	}
+
+	.duration::before {
+		content: '⏳ ';
+		font-size: smaller;
 	}
 
 	li[data-type='work'] {
 		list-style: work;
+		background-color: var(--table-row-stripped-background-color);
 	}
 
 	li[data-type='chill'] {
@@ -78,11 +100,5 @@
 		system: cyclic;
 		suffix: ' ';
 		symbols: '☕';
-	}
-
-	@counter-style repeating {
-		system: cyclic;
-		suffix: ' ';
-		symbols: '✏️';
 	}
 </style>

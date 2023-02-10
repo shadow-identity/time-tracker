@@ -1,17 +1,18 @@
 <script lang="ts">
 	import { DateTime } from 'luxon';
 	import { browser } from '$app/environment';
-	import Time, { State } from './Time.svelte';
+	import Time from './Time.svelte';
 	import { onMount } from 'svelte';
 	import {
 		type WorkRecord,
 		addWorkRecord,
 		restoreWorkRecords,
 		readWorkRecords,
-		PRINT_FORMAT,
 		getWorkDuration,
-		getPauseDuration
+		getPauseDuration,
+		resetDayRecords
 	} from '$lib/workRecords';
+	import { PRINT_FORMAT, State } from '$lib/constants';
 
 	let isWorking = false;
 	let workRecords: WorkRecord[] = [];
@@ -107,7 +108,7 @@
 	const resetRecords = () => {
 		workRecords = [];
 		isWorking = false;
-		resetRecords();
+		resetDayRecords();
 	};
 </script>
 
@@ -158,18 +159,22 @@
 		flex: auto 0 5;
 	}
 
-	@media (min-width: 480px) {
+	@media (max-width: 200px) {
 		footer {
 			padding: 12px 0;
 		}
 	}
 
 	button.warning {
-		color: #f0f9;
-		border-color: #f0f9;
+		color: var(--form-element-invalid-border-color);
+		border-color: var(--form-element-invalid-border-color);
 	}
 	button.warning:hover {
-		color: fuchsia;
-		border-color: fuchsia;
+		color: var(--form-element-invalid-active-border-color);
+		border-color: var(--form-element-invalid-active-border-color);
+	}
+	button.warning:focus {
+		box-shadow: var(--button-hover-box-shadow, 0 0 0 rgba(0, 0, 0, 0)),
+			0 0 0 var(--outline-width) var(--form-element-invalid-focus-color);
 	}
 </style>
