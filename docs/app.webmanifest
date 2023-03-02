@@ -1,0 +1,19 @@
+{
+	"name": "Time Tracker",
+	"icons": [
+		{
+			"src": "/favicon_192.png",
+			"type": "image/png",
+			"sizes": "192x192"
+		},
+		{
+			"src": "/favicon_512.png",
+			"type": "image/png",
+			"sizes": "512x512",
+			"purpose": "maskable"
+		}
+	],
+	"start_url": "/",
+	"display": "standalone",
+	"theme_color": "white"
+}
