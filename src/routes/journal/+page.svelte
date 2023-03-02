@@ -6,7 +6,7 @@
 </script>
 
 <svelte:head>
-	<title>Time Tracker: Journal</title>
+	<title>{dev && '[DEV]'} Time Tracker: Journal</title>
 	<meta name="description" content="List of all the time stamps" />
 </svelte:head>
 
