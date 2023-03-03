@@ -3,10 +3,11 @@
 	import { PRINT_FORMAT, State, STATE_SYMBOL } from '$lib/constants';
 	import { getPauseDuration, getWorkDuration, readAllDays } from '$lib/workRecords';
 	import { DateTime } from 'luxon';
+	import Title from '../Title.svelte';
 </script>
 
 <svelte:head>
-	<title>{dev && '[DEV]'} Time Tracker: Journal</title>
+	<Title />
 	<meta name="description" content="List of all the time stamps" />
 </svelte:head>
 

@@ -1,10 +1,11 @@
 <script>
 	import { dev } from '$app/environment';
 	import Counter from './Counter.svelte';
+	import Title from './Title.svelte';
 </script>
 
 <svelte:head>
-	<title>{dev && '[DEV]'}Time Tracker</title>
+	<Title />
 	<meta name="description" content="App to track working and rest time" />
 </svelte:head>
 
